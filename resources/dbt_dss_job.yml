@@ -2,53 +2,52 @@ resources:
   jobs:
     dbt_dss_job:
       name: dbt_dss_job
-      tasks:
-        - task_key: dbt_dss_job
-          dbt_task:
-            project_directory: ${workspace.file_path}/
-            commands:
-              - dbt deps #If you have private packages this can be run before bundle deploy
-              - "dbt build --exclude tag:stream --target-path /Volumes/${var.dbt_catalog}/bronze/dbt_artefacts/runs/{{job.id}}/{{job.run_id}} --vars 'schema_prefix: ${var.schema_prefix}'" # Remove exclude if you want to run with streaming tables
-            warehouse_id: ${var.warehouse_id}
-            catalog: ${var.dbt_catalog}
-            source: WORKSPACE
-          job_cluster_key: dbt_CLI
-          libraries:
-            - pypi:
-                package: dbt-databricks>=1.0.0,<2.0.0
-        - task_key: dbt_retry
-          depends_on:
-            - task_key: dbt_dss_job
-          run_if: ALL_FAILED
-          dbt_task:
-            project_directory: ${workspace.file_path}/
-            commands:
-              - dbt deps
-              - dbt retry --state /Volumes/${var.dbt_catalog}/bronze/dbt_artefacts/runs/{{job.id}}/{{job.run_id}}
-            warehouse_id: ${var.warehouse_id}
-            catalog: ${var.dbt_catalog}
-            source: WORKSPACE
-          job_cluster_key: dbt_CLI
-          libraries:
-            - pypi:
-                package: dbt-databricks>=1.0.0,<2.0.0
+
+      # Cluster definition first
       job_clusters:
         - job_cluster_key: dbt_CLI
           new_cluster:
-            spark_version: 13.3.x-scala2.12
-            spark_conf:
-              spark.master: local[*, 4]
-              spark.databricks.cluster.profile: singleNode
-            azure_attributes:
-              first_on_demand: 1
-              availability: ON_DEMAND_AZURE
-              spot_bid_max_price: -1
+            num_workers: 0
+            spark_version: 15.4.x-scala2.12
             node_type_id: Standard_DS3_v2
+            # data_security_mode: SINGLE_USER
+            enable_elastic_disk: false
+            runtime_engine: STANDARD
+            spark_conf:
+              spark.databricks.cluster.profile: singleNode
+              spark.master: local[*]
             custom_tags:
               ResourceClass: SingleNode
-            spark_env_vars:
-              PYSPARK_PYTHON: /databricks/python3/bin/python3
-            enable_elastic_disk: true
-            data_security_mode: SINGLE_USER
-            runtime_engine: PHOTON
-            num_workers: 0
+
+      # Tasks second
+      tasks:
+        - task_key: dbt_build
+          job_cluster_key: dbt_CLI
+          dbt_task:
+            project_directory: ${workspace.file_path}/
+            warehouse_id: ${var.warehouse_id}
+            catalog: ${var.dbt_catalog}
+            source: WORKSPACE
+            commands:
+              - dbt deps
+              - "dbt build --exclude tag:stream --target-path /Volumes/${var.dbt_catalog}/bronze/dbt_artefacts/runs/{{job.id}}/{{job.run_id}} --vars 'schema_prefix: ${var.schema_prefix}'"
+          libraries:
+            - pypi:
+                package: dbt-databricks>=1.11.0,<2.0.0
+
+        - task_key: dbt_retry
+          depends_on:
+            - task_key: dbt_build
+          run_if: ALL_FAILED
+          job_cluster_key: dbt_CLI
+          dbt_task:
+            project_directory: ${workspace.file_path}/
+            warehouse_id: ${var.warehouse_id}
+            catalog: ${var.dbt_catalog}
+            source: WORKSPACE
+            commands:
+              - dbt deps
+              - "dbt retry --state /Volumes/${var.dbt_catalog}/bronze/dbt_artefacts/runs/{{job.id}}/{{job.run_id}}"
+          libraries:
+            - pypi:
+                package: dbt-databricks>=1.11.0,<2.0.0
