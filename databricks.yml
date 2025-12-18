@@ -9,16 +9,16 @@ include:
 variables:
   dbt_catalog:
     description: Catalog to use
-    default: dss_dbt_catalog
+    default: ct_dbt_tmp
   schema_prefix:
     description: Schema prefix to use
-    default:
+    default: "" # Empty string, no prefix
   warehouse_id:
     description: Databricks SQL warehouse to use
-    default: 2e78d4a8647e3893
+    default: 148ccb90800933a1
   host:
     description: Workspace host
-    default: https://adb-984752964297111.11.azuredatabricks.net
+    default: https://adb-984752964297111.11.azuredatabricks.net/
 
 targets:
   # The 'dev' target, used for development purposes.
@@ -29,8 +29,10 @@ targets:
     # automatic triggers for jobs and enables the 'development' mode for Delta Live Tables pipelines.
     mode: development
     default: true
+    workspace:
+      profile: field-eng-east
     variables:
-      dbt_catalog: dev_dss_dbt_catalog
+      dbt_catalog: dev_ct_dbt_tmp # Changed from dev_dss_dbt_catalog
 
   # Optionally, there could be a 'staging' target here.
   # (See Databricks docs on CI/CD at https://docs.databricks.com/dev-tools/bundles/index.html.)
@@ -38,7 +40,7 @@ targets:
   qa:
     mode: development
     variables:
-      dbt_catalog: qa_dss_dbt_catalog
+      dbt_catalog: qa_ct_dbt_tmp
 
   # The 'prod' target, used for production deployment.
   prod:
@@ -48,7 +50,7 @@ targets:
     # to a path that is not specific to the current user.
     mode: production
     variables:
-      dbt_catalog: prod_dss_dbt_catalog
+      dbt_catalog: prd_ct_dbt_tmp
     workspace:
       root_path: /Shared/.bundle/prod/${bundle.name}
     run_as:
@@ -56,4 +58,3 @@ targets:
       # a service principal could be used here using service_principal_name
       # (see Databricks documentation).
       user_name: gustav.byberg@databricks.com
-    
